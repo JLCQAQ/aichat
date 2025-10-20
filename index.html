@@ -213,10 +213,37 @@
         }
         
         // API调用
-        async function callDeepSeekAPI(history) {
-            const apiKey = ''; // 🔐 在这里填入你的API密钥
-            const apiUrl = 'https://api.deepseek.com/v1/chat/completions';
-            
+async function callDeepSeekAPI(history) {
+    try {
+        console.log('发送请求到后端API...');
+        
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                messages: history 
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`网络请求失败: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('后端API返回:', data);
+        
+        if (data.success) {
+            return data.reply;
+        } else {
+            throw new Error(data.error || '服务器返回错误');
+        }
+    } catch (error) {
+        console.error('API调用错误:', error);
+        throw new Error('网络错误，请稍后重试: ' + error.message);
+    }
+}           
             const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: {

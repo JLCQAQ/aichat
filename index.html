@@ -3,13 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <title>我的AI聊天伙伴</title>
-    <!-- PWA配置 -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#667eea">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="AI聊天">
-    
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         * { box-sizing: border-box; }
@@ -27,22 +20,42 @@
             border-radius: 20px;
             padding: 20px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            height: 80vh;
+            height: 85vh;
             display: flex;
             flex-direction: column;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .clear-btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 15px;
+            font-size: 12px;
+            cursor: pointer;
         }
         #chat { 
             flex: 1; 
             overflow-y: auto;
             padding: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
+            border: 1px solid #f0f0f0;
+            border-radius: 10px;
+            background: #fafafa;
         }
         .message { 
-            margin: 15px 0; 
+            margin: 12px 0; 
             padding: 12px 16px; 
             border-radius: 18px;
-            max-width: 80%;
+            max-width: 85%;
             animation: fadeIn 0.3s ease-in;
+            line-height: 1.4;
+            word-wrap: break-word;
         }
         .user { 
             background: #667eea; 
@@ -51,9 +64,11 @@
             border-bottom-right-radius: 4px;
         }
         .ai { 
-            background: #f1f3f4; 
+            background: white; 
             color: #333;
+            border: 1px solid #e1e5e9;
             border-bottom-left-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .input-area {
             display: flex;
@@ -67,6 +82,7 @@
             border-radius: 25px;
             font-size: 16px;
             outline: none;
+            background: white;
         }
         #input:focus {
             border-color: #667eea;
@@ -80,8 +96,13 @@
             font-size: 16px;
             cursor: pointer;
             transition: all 0.3s;
+            min-width: 80px;
         }
-        button:active {
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        button:active:not(:disabled) {
             transform: scale(0.95);
             background: #5a6fd8;
         }
@@ -89,46 +110,50 @@
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        .typing-indicator {
+            display: none;
+            padding: 12px 16px;
+            color: #666;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
     <div class="chat-container">
-        <div id="chat">
-            <div class="message ai">👋 你好！我是你的AI聊天伙伴，想聊点什么？</div>
+        <div class="header">
+            <h3 style="margin: 0; color: #333;">我的AI聊天伙伴</h3>
+            <button class="clear-btn" onclick="clearHistory()">清除对话</button>
         </div>
+        
+        <div id="chat">
+            <div class="typing-indicator" id="typing">AI正在思考...</div>
+        </div>
+        
         <div class="input-area">
             <input type="text" id="input" placeholder="输入你想聊的..." autocomplete="off">
-            <button onclick="sendMessage()">发送</button>
+            <button onclick="sendMessage()" id="sendBtn">发送</button>
         </div>
     </div>
 
     <script>
-        async function sendMessage() {
-            const input = document.getElementById('input');
-            const button = document.querySelector('button');
-            const message = input.value.trim();
-            
-            if (!message) return;
-            
-            // 显示用户消息
-            displayMessage(message, 'user');
-            input.value = '';
-            button.disabled = true;
-            button.textContent = '思考中...';
-            
-            try {
-                // 调用DeepSeek API
-                const response = await callDeepSeekAPI(message);
-                displayMessage(response, 'ai');
-            } catch (error) {
-                displayMessage('抱歉，出了点问题，请重试', 'ai');
-            } finally {
-                button.disabled = false;
-                button.textContent = '发送';
-                input.focus();
-            }
+        // 对话历史管理
+        function saveConversation(messages) {
+            localStorage.setItem('chatHistory', JSON.stringify(messages));
         }
         
+        function loadConversation() {
+            const saved = localStorage.getItem('chatHistory');
+            return saved ? JSON.parse(saved) : [];
+        }
+        
+        function clearHistory() {
+            localStorage.removeItem('chatHistory');
+            const chat = document.getElementById('chat');
+            chat.innerHTML = '<div class="message ai">👋 对话历史已清除！让我们重新开始吧！</div>';
+            document.getElementById('typing').style.display = 'none';
+        }
+        
+        // 显示消息
         function displayMessage(text, sender) {
             const chat = document.getElementById('chat');
             const messageDiv = document.createElement('div');
@@ -138,14 +163,57 @@
             chat.scrollTop = chat.scrollHeight;
         }
         
-        // 回车发送消息
-        document.getElementById('input').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                sendMessage();
+        // 发送消息
+        async function sendMessage() {
+            const input = document.getElementById('input');
+            const button = document.getElementById('sendBtn');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // 获取历史记录
+            let history = loadConversation();
+            
+            // 添加用户消息到历史
+            history.push({ role: 'user', content: message });
+            
+            // 显示用户消息
+            displayMessage(message, 'user');
+            input.value = '';
+            button.disabled = true;
+            button.textContent = '思考中...';
+            
+            // 显示输入指示器
+            document.getElementById('typing').style.display = 'block';
+            const chat = document.getElementById('chat');
+            chat.scrollTop = chat.scrollHeight;
+            
+            try {
+                // 调用DeepSeek API
+                const response = await callDeepSeekAPI(history);
+                
+                // 添加AI回复到历史
+                history.push({ role: 'assistant', content: response });
+                
+                // 保存更新后的历史
+                saveConversation(history);
+                
+                // 隐藏输入指示器并显示回复
+                document.getElementById('typing').style.display = 'none';
+                displayMessage(response, 'ai');
+                
+            } catch (error) {
+                document.getElementById('typing').style.display = 'none';
+                displayMessage('抱歉，出了点问题，请重试', 'ai');
+            } finally {
+                button.disabled = false;
+                button.textContent = '发送';
+                input.focus();
             }
-        });
+        }
         
-        async function callDeepSeekAPI(message) {
+        // API调用
+        async function callDeepSeekAPI(history) {
             const apiKey = 'sk-612bd0dd069d40b5a28054d6d90b2760'; // 🔐 在这里填入你的API密钥
             const apiUrl = 'https://api.deepseek.com/v1/chat/completions';
             
@@ -157,7 +225,7 @@
                 },
                 body: JSON.stringify({
                     model: 'deepseek-chat',
-                    messages: [{ role: 'user', content: message }],
+                    messages: history,
                     max_tokens: 2000,
                     temperature: 0.7
                 })
@@ -171,15 +239,25 @@
                 throw new Error('API返回格式异常');
             }
         }
-    </script>
-    
-    <!-- Service Worker 注册 -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/my-ai-chat/sw.js')
-                .then(() => console.log('SW Registered'))
-                .catch(() => console.log('SW Failed'));
-        }
+        
+        // 回车发送消息
+        document.getElementById('input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        
+        // 页面加载时恢复历史记录
+        window.addEventListener('load', function() {
+            const history = loadConversation();
+            if (history.length > 0) {
+                history.forEach(msg => {
+                    displayMessage(msg.content, msg.role === 'user' ? 'user' : 'ai');
+                });
+            } else {
+                displayMessage('👋 你好！我是你的AI聊天伙伴，想聊点什么？', 'ai');
+            }
+        });
     </script>
 </body>
 </html>
